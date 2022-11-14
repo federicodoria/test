@@ -1,4 +1,5 @@
 import pandas
+import django
 
 x = "daje"
 
