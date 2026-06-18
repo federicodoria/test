@@ -7,7 +7,7 @@
 #     (settlement DOF, floor load formula, pushover fallback)
 # =====================================================================================
 
-proc section {title} {
+proc phase {title} {
     puts "\n============================================================"
     puts "  $title"
     puts "============================================================"
@@ -25,7 +25,7 @@ proc check {label result} {
 # SETUP
 # =====================================================================================
 
-section "MODEL SETUP"
+phase "MODEL SETUP"
 
 if {[catch {wipe} err]} { puts "  wipe: $err" }
 if {[catch {model basic -ndm 3 -ndf 6} err]} {
@@ -55,7 +55,7 @@ set g       9.81
 # NODES
 # =====================================================================================
 
-section "NODES"
+phase "NODES"
 
 if {[catch {
 
@@ -94,7 +94,7 @@ if {[catch {
 # FIX #1 (from review): node 1 DOF 3 (vertical) left FREE for settlement
 # =====================================================================================
 
-section "BOUNDARY CONDITIONS"
+phase "BOUNDARY CONDITIONS"
 
 if {[catch {
     fix 1  1 1 0 1 1 1    ;# vertical DOF (3) free — needed for settlement
@@ -110,7 +110,7 @@ if {[catch {
 # ELEMENTS — PIERS
 # =====================================================================================
 
-section "PIER ELEMENTS"
+phase "PIER ELEMENTS"
 
 foreach {eid ni nj nk} {
     1   1  3  9
@@ -141,7 +141,7 @@ foreach {eid ni nj nk} {
 # ELEMENTS — SPANDRELS
 # =====================================================================================
 
-section "SPANDREL ELEMENTS"
+phase "SPANDREL ELEMENTS"
 
 foreach {eid ni nj nk} {
     7   3  4  15
@@ -169,7 +169,7 @@ foreach {eid ni nj nk} {
 # RECORDERS
 # =====================================================================================
 
-section "RECORDERS"
+phase "RECORDERS"
 
 recorder Node -file RoofDisp.out      -time -node 8     -dof 1 disp
 recorder Node -file SupportReaction.out -time -node 1 2 -dof 1 reaction
@@ -185,7 +185,7 @@ puts "  Recorders defined : OK"
 # If the intent was masonry self-weight use: -$rho*$g*$H_story*$L_span*$T_pier
 # =====================================================================================
 
-section "GRAVITY LOADS"
+phase "GRAVITY LOADS"
 
 set floorLoad [expr -5.0e3 * $L_span * $T_pier]
 puts "  Floor load per node : $floorLoad N  (5 kN/m² × L_span × T_pier)"
@@ -228,7 +228,7 @@ puts "  Gravity loads held constant. Pseudo-time reset to 0."
 # node 1, DOF 3 (Z) is now free — sp command will work correctly
 # =====================================================================================
 
-section "FOUNDATION SETTLEMENT"
+phase "FOUNDATION SETTLEMENT"
 
 pattern Plain 20 Linear {
     sp 1 3 -0.001
@@ -253,7 +253,7 @@ puts "  Settlement held constant. Pseudo-time reset to 0."
 # PUSHOVER LOAD PATTERN
 # =====================================================================================
 
-section "PUSHOVER SETUP"
+phase "PUSHOVER SETUP"
 
 pattern Plain 30 Linear {
     load 3 0.20 0.0 0.0 0.0 0.0 0.0
@@ -287,7 +287,7 @@ puts "  Number of steps     : $nSteps"
 # FIX #3 (from review): step-by-step loop — no overshoot on fallback
 # =====================================================================================
 
-section "PUSHOVER ANALYSIS"
+phase "PUSHOVER ANALYSIS"
 
 set completedSteps 0
 set usingInitial   0
