@@ -170,10 +170,10 @@ loadConst -time 0.0
 # --------------------------------------------------------------------------------------------------
 # STEP 3: RELEASE VERTICAL DOF AT NODE 2 (settlement phase preparation)
 # DOF order: 1=X  2=Y  3=Z(vertical)  4=Rx  5=Ry  6=Rz
-# Release DOF 3 (vertical) so settlement can be imposed
+# Must remove the existing SP constraint on DOF 3 before it can be freed
 # --------------------------------------------------------------------------------------------------
 
-fix 2  1 1 0 1 1 1
+remove sp 2 3
 
 wipeAnalysis
 
@@ -221,10 +221,12 @@ loadConst -time 0.0
 record
 
 # --------------------------------------------------------------------------------------------------
-# STEP 5: RE-FIX NODE 2 (restore full fixity after settlement)
+# STEP 5: RE-FIX NODE 2 (restore vertical fixity after settlement)
+# DOFs 1,2,4,5,6 are still constrained from the original fix command
+# Only DOF 3 was removed, so only DOF 3 needs to be re-added
 # --------------------------------------------------------------------------------------------------
 
-fix 2  1 1 1 1 1 1
+fix 2  0 0 1 0 0 0
 
 wipeAnalysis
 
