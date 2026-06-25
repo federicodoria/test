@@ -190,14 +190,13 @@ set targetSettlement  0.05;   # target settlement (m), adjust as needed
 set settlIncr         0.0001; # displacement increment per step (m)
 set settlSteps        [expr int($targetSettlement / $settlIncr)]
 
-system     BandGeneral
-numberer   Plain
+system      BandGeneral
+numberer    Plain
 constraints Transformation
-test       NormDispIncr $tol $iter 5
-algorithm  Newton
-analysis   Static
-
-integrator DisplacementControl 2 3 [expr -$settlIncr]
+test        NormDispIncr $tol $iter 5
+algorithm   Newton
+integrator  DisplacementControl 2 3 [expr -$settlIncr]
+analysis    Static
 
 puts "Running settlement analysis..."
 
@@ -246,14 +245,13 @@ set nSteps      [expr int($targetDisp / $pushIncr)]
 set controlled_node 4
 set controlled_dof  1
 
-system     BandGeneral
-numberer   Plain
+system      BandGeneral
+numberer    Plain
 constraints Transformation
-test       NormDispIncr $tol $iter 5
-algorithm  Newton
-analysis   Static
-
-integrator DisplacementControl $controlled_node $controlled_dof $pushIncr
+test        NormDispIncr $tol $iter 5
+algorithm   Newton
+integrator  DisplacementControl $controlled_node $controlled_dof $pushIncr
+analysis    Static
 
 puts "Running horizontal pushover..."
 
