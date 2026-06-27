@@ -182,7 +182,21 @@ while {$step < $nSteps && $ok == 0} {
     }
 
     if {$ok != 0} {
-        puts "Analysis failed to converge at step $step — stopping."
+        # Attempt 4: Arc-Length — traces post-peak descending branch past limit point
+        puts "EnergyIncr failed at step $step — trying Arc-Length"
+        reset
+        test      NormDispIncr 1.0e-3 200 0
+        algorithm KrylovNewton
+        integrator ArcLength [expr $incr*5.0] 1.0
+        set ok [analyze 1]
+        # Restore DisplacementControl for subsequent steps
+        integrator DisplacementControl 4 1 $incr
+    }
+
+    if {$ok != 0} {
+        puts "Analysis failed to converge at step $step — structure has reached collapse."
+        puts "Collapse displacement at node 4 DOF 1: [expr $step * $incr] m"
+        puts "Drift ratio: [expr ($step * $incr) / $H_pier * 100.0] %"
         break
     }
 
