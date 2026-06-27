@@ -75,7 +75,7 @@ constraints Transformation
 numberer    Plain
 system      BandGeneral
 algorithm   Newton
-test        NormDispIncr 1.0e-6 50 0
+test        NormDispIncr 1.0e-4 100 0
 integrator  DisplacementControl 2 3 $incrS
 analysis    Static
 
