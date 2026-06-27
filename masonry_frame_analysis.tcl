@@ -67,16 +67,17 @@ wipeAnalysis
 # Remove only DOF 3 (vertical) SP constraint from node 2 to allow imposed settlement
 remove sp 2 3
 
-constraints Transformation
-numberer    Plain
-system      BandGeneral
-analysis    Static
-
 set targetSettlement -0.005
 set incrS            0.00005
 set nStepsS          [expr int(abs($targetSettlement) / abs($incrS))]
 
+constraints Transformation
+numberer    Plain
+system      BandGeneral
+algorithm   Newton
+test        NormDispIncr 1.0e-6 50 0
 integrator  DisplacementControl 2 3 $incrS
+analysis    Static
 
 set ok   0
 set step 0
@@ -131,15 +132,17 @@ pattern Plain 30 Linear {
     load 4  1.0 0.0 0.0  0.0 0.0 0.0
 }
 
-constraints Transformation
-numberer    Plain
-system      BandGeneral
-
 set targetDisp 0.4
 set incr       0.0001
 set nSteps     [expr int($targetDisp / $incr)]
 
+constraints Transformation
+numberer    Plain
+system      BandGeneral
+algorithm   Newton
+test        NormDispIncr 1.0e-6 50 0
 integrator  DisplacementControl 4 1 $incr
+analysis    Static
 
 # Adaptive pushover loop with algorithm and step-size fallbacks
 set ok 0
