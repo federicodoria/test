@@ -84,23 +84,27 @@ set step 0
 
 while {$step < $nStepsS && $ok == 0} {
 
-    # Attempt 1: Newton, tight tolerance
-    test      NormDispIncr 1.0e-6 50 0
+    # Attempt 1: Newton, engineering tolerance
+    test      NormDispIncr 1.0e-4 100 0
     algorithm Newton
+    integrator DisplacementControl 2 3 $incrS
     set ok [analyze 1]
 
     if {$ok != 0} {
         # Attempt 2: KrylovNewton, relaxed tolerance
         puts "Settlement Newton failed at step $step — trying KrylovNewton"
-        test      NormDispIncr 1.0e-4 100 0
+        reset
+        test      NormDispIncr 1.0e-3 200 0
         algorithm KrylovNewton
+        integrator DisplacementControl 2 3 $incrS
         set ok [analyze 1]
     }
 
     if {$ok != 0} {
-        # Attempt 3: ModifiedNewton with sub-stepping (incrS/10)
+        # Attempt 3: sub-stepping with EnergyIncr (robust near softening)
         puts "Settlement KrylovNewton failed at step $step — trying sub-stepping"
-        test      NormDispIncr 1.0e-4 200 0
+        reset
+        test      EnergyIncr 1.0e-6 200 0
         algorithm ModifiedNewton -factoronce
         integrator DisplacementControl 2 3 [expr $incrS/10.0]
         set ok [analyze 10]
@@ -140,33 +144,37 @@ constraints Transformation
 numberer    Plain
 system      BandGeneral
 algorithm   Newton
-test        NormDispIncr 1.0e-6 50 0
+test        NormDispIncr 1.0e-4 100 0
 integrator  DisplacementControl 4 1 $incr
 analysis    Static
 
 # Adaptive pushover loop with algorithm and step-size fallbacks
-set ok 0
+set ok   0
 set step 0
 
 while {$step < $nSteps && $ok == 0} {
 
-    # --- Attempt 1: Newton, tight tolerance ---
-    test      NormDispIncr 1.0e-6 50 0
+    # Attempt 1: Newton, engineering tolerance (1e-4 avoids false failures)
+    test      NormDispIncr 1.0e-4 100 0
     algorithm Newton
+    integrator DisplacementControl 4 1 $incr
     set ok [analyze 1]
 
     if {$ok != 0} {
-        # --- Attempt 2: KrylovNewton, relaxed tolerance, more iterations ---
+        # Attempt 2: KrylovNewton, relaxed tolerance
         puts "Newton failed at step $step — trying KrylovNewton"
-        test      NormDispIncr 1.0e-4 100 0
+        reset
+        test      NormDispIncr 1.0e-3 200 0
         algorithm KrylovNewton
+        integrator DisplacementControl 4 1 $incr
         set ok [analyze 1]
     }
 
     if {$ok != 0} {
-        # --- Attempt 3: smaller sub-steps with ModifiedNewton ---
-        puts "KrylovNewton failed at step $step — trying sub-stepping"
-        test      NormDispIncr 1.0e-4 200 0
+        # Attempt 3: sub-stepping with EnergyIncr (robust near limit point)
+        puts "KrylovNewton failed at step $step — trying sub-stepping with EnergyIncr"
+        reset
+        test      EnergyIncr 1.0e-6 200 0
         algorithm ModifiedNewton -factoronce
         integrator DisplacementControl 4 1 [expr $incr/10.0]
         set ok [analyze 10]
