@@ -34,16 +34,16 @@ set g       9.81
 # NODES
 # --------------------------------------------------------------------------------------------------
 
-node 1   0.0            0.0   0.0
-node 2   $L_span        0.0   0.0
-node 3   0.0            0.0   $H_pier
-node 4   $L_span        0.0   $H_pier
-node 5   0.0            0.0   [expr $H_pier/2.0]
-node 6   $L_span        0.0   [expr $H_pier/2.0]
-node 7   [expr $L_span/2.0]  0.0  $H_pier
+node 1   0.0                  0.0   0.0
+node 2   $L_span              0.0   0.0
+node 3   0.0                  0.0   $H_pier
+node 4   $L_span              0.0   $H_pier
+node 5   0.0                  0.0   [expr $H_pier/2.0]
+node 6   $L_span              0.0   [expr $H_pier/2.0]
+node 7   [expr $L_span/2.0]   0.0   $H_pier
 
 # --------------------------------------------------------------------------------------------------
-# STEP 1: INITIAL BOUNDARY CONDITIONS — Both bases fully fixed
+# STEP 1: INITIAL BOUNDARY CONDITIONS — both bases fully fixed
 # --------------------------------------------------------------------------------------------------
 
 fix 1  1 1 1 1 1 1
@@ -144,7 +144,7 @@ pattern Plain 10 Linear {
     load 4  0.0 0.0 $topLoad 0.0 0.0 0.0
 }
 
-# tolF : force unbalance tolerance (N) — physical and dimension-consistent
+# tolF : force unbalance tolerance (N)
 # iter : max Newton iterations per step
 set tolF  1.0
 set iter  200
@@ -169,34 +169,40 @@ if {$ok != 0} {
 loadConst -time 0.0
 
 # --------------------------------------------------------------------------------------------------
-# STEP 3: RELEASE VERTICAL DOF AT NODE 2 (settlement phase preparation)
+# STEP 3: RELEASE VERTICAL DOF AT NODE 2 and set up imposed settlement
 # DOF order: 1=X  2=Y  3=Z(vertical)  4=Rx  5=Ry  6=Rz
-# Must remove the existing SP constraint on DOF 3 before it can be freed
+#
+# Approach: "sp inside a load pattern" + LoadControl
+#   - Transformation handler enforces the prescribed disp kinematically (DOF eliminated)
+#   - At load factor 0: imposed disp = 0 (matches original fixed state, zero unbalance)
+#   - At load factor 1: imposed disp = -targetSettlement
+#   - This avoids the large initial unbalance from suddenly releasing the support reaction
 # --------------------------------------------------------------------------------------------------
 
+set targetSettlement  0.05;   # target settlement (m) — adjust as needed
+set settlSteps        1000;   # load steps to reach full settlement
+
+# Remove the homogeneous (zero) fixed SP at node 2 DOF 3 before adding the ramped one
 remove sp 2 3
 
 wipeAnalysis
 
 # --------------------------------------------------------------------------------------------------
-# STEP 4: SETTLEMENT — Displacement-controlled vertical pushdown at node 2
-# Apply a reference downward unit force at node 2 (DOF 3, negative Z = downward)
+# STEP 4: SETTLEMENT
 # --------------------------------------------------------------------------------------------------
 
 pattern Plain 20 Linear {
-    load 2  0.0 0.0 -1.0 0.0 0.0 0.0
+    sp 2 3 [expr -$targetSettlement]
 }
 
-set targetSettlement  0.05;    # target settlement (m) — adjust as needed
-set settlIncr         0.00005; # displacement increment per step (m) — smaller for stability
-set settlSteps        [expr int($targetSettlement / $settlIncr)]
+set settlIncr [expr 1.0 / $settlSteps]
 
 system      BandGeneral
 numberer    Plain
 constraints Transformation
 test        NormUnbalance $tolF $iter 2
 algorithm   Newton
-integrator  DisplacementControl 2 3 [expr -$settlIncr]
+integrator  LoadControl $settlIncr
 analysis    Static
 
 puts "Running settlement analysis..."
@@ -221,28 +227,27 @@ while {$stepS < $settlSteps && $ok == 0} {
     }
 
     if {$ok != 0} {
-        puts "Settlement failed at step $stepS — stopping settlement."
+        puts "Settlement failed at step $stepS — stopping."
         break
     }
     incr stepS
 }
 
 if {$ok != 0} {
-    puts "Settlement analysis stopped early at step $stepS of $settlSteps."
+    puts "Settlement stopped early at step $stepS of $settlSteps."
 } else {
     puts "Settlement analysis completed."
 }
 
+# Freeze settlement at final position (load factor = 1, imposed disp = -targetSettlement).
+# The frozen pattern 20 sp constraint keeps node 2 DOF 3 at the settled value —
+# no need to re-fix node 2 manually.
 loadConst -time 0.0
 record
 
 # --------------------------------------------------------------------------------------------------
-# STEP 5: RE-FIX NODE 2 (restore vertical fixity after settlement)
-# DOFs 1,2,4,5,6 are still constrained from the original fix command
-# Only DOF 3 was removed, so only DOF 3 needs to be re-added
+# STEP 5: wipeAnalysis — no re-fix needed, pattern 20 holds the settlement
 # --------------------------------------------------------------------------------------------------
-
-fix 2  0 0 1 0 0 0
 
 wipeAnalysis
 
@@ -294,7 +299,7 @@ while {$stepP < $nSteps && $ok == 0} {
     }
 
     if {$ok != 0} {
-        puts "Pushover stopped at step $stepP of $nSteps — structure likely at capacity."
+        puts "Pushover stopped at step $stepP — structure likely at capacity."
         break
     }
     incr stepP
