@@ -1,0 +1,103 @@
+# --------------------------------------------------------------------------------------------------
+# MASONRY FRAME ANALYSIS WITH SETTLEMENT AND PUSHOVER
+# --------------------------------------------------------------------------------------------------
+
+wipe;
+model basic -ndm 3 -ndf 6;
+
+# --- GEOMETRY ---
+set H_pier 3.0
+set L_pier 1.0
+set T_pier 0.25
+set L_span 3.0
+set H_span 0.80
+
+# --- MATERIALS ---
+set E    1700.0e+06
+set G     550.0e+06
+set fc      6.0e+06
+set c       0.150e+06
+set Gc      6.0
+set mu0     0.40
+set beta    0.30
+set rho  1200.0
+set g       9.81
+
+# --- NODES ---
+# All nodes in the XZ plane (Y=0), except node 1 and 2 which are base nodes
+node 1  0.0        0.0  0.0
+node 2  $L_span    0.0  0.0
+node 3  0.0        0.0  $H_pier
+node 4  $L_span    0.0  $H_pier
+node 5  0.0        0.0  [expr $H_pier/2.0]
+node 6  $L_span    0.0  [expr $H_pier/2.0]
+node 7  [expr $L_span/2.0]  0.0  $H_pier
+
+# --- ELEMENTS ---
+# Pier 1 (left):  base=1, top=3, internal=5  — local x along Z (vertical), local y along Y
+element Macroelement3d 1  1 3 5  0.0 0.0 1.0  0.0 1.0 0.0  -tremuri $H_pier $L_pier $T_pier $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
+
+# Pier 2 (right): base=2, top=4, internal=6
+element Macroelement3d 2  2 4 6  0.0 0.0 1.0  0.0 1.0 0.0  -tremuri $H_pier $L_pier $T_pier $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
+
+# Spandrel:       left=3, right=4, internal=7 — local x along X (horizontal), local y along Z
+element Macroelement3d 3  3 4 7  1.0 0.0 0.0  0.0 0.0 1.0  -tremuri $H_span $L_span $T_pier $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
+
+# --- STAGE 1: GRAVITY ANALYSIS ---
+fix 1  1 1 1 1 1 1
+fix 2  1 1 1 1 1 1
+
+pattern Plain 10 Linear {
+    load 3  0.0 0.0 [expr -5.0*$g*$rho*$L_span*$T_pier]  0.0 0.0 0.0
+    load 4  0.0 0.0 [expr -5.0*$g*$rho*$L_span*$T_pier]  0.0 0.0 0.0
+}
+constraints Transformation
+numberer    Plain
+system      BandGeneral
+algorithm   Newton
+test        NormDispIncr 1.0e-6 50 0
+integrator  LoadControl 1.0
+analysis    Static
+analyze     1
+loadConst   -time 0.0
+
+# --- STAGE 2: SETTLEMENT ---
+wipeAnalysis
+
+# Release vertical DOF (3) at node 2 to allow imposed settlement
+fix 2  1 1 0 1 1 1
+
+# Drive node 2 downward via DisplacementControl — no auxiliary load needed
+set targetSettlement -0.005
+set nSteps           100
+integrator  DisplacementControl 2 3 [expr $targetSettlement / $nSteps]
+test        NormDispIncr 1.0e-6 50 0
+algorithm   Newton
+constraints Transformation
+numberer    Plain
+system      BandGeneral
+analysis    Static
+analyze     $nSteps
+loadConst   -time 0.0
+
+# --- STAGE 3: HORIZONTAL PUSHOVER ---
+wipeAnalysis
+
+# Re-fix node 2 at its settled position (foundation now rigid)
+fix 2  1 1 1 1 1 1
+
+pattern Plain 30 Linear {
+    load 4  1.0 0.0 0.0  0.0 0.0 0.0
+}
+set targetDisp 0.4
+set incr       0.0001
+set nSteps     [expr int($targetDisp / $incr)]
+integrator  DisplacementControl 4 1 $incr
+test        NormDispIncr 1.0e-6 50 0
+algorithm   Newton
+constraints Transformation
+numberer    Plain
+system      BandGeneral
+analysis    Static
+analyze     $nSteps
+puts "Analysis completed."
