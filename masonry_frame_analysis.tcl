@@ -64,22 +64,62 @@ loadConst   -time 0.0
 # --- STAGE 2: SETTLEMENT ---
 wipeAnalysis
 
-# Release only DOF 3 (vertical) at node 2 — remove its existing SP constraint
-# (fix cannot modify or remove constraints already in the domain)
+# Remove only DOF 3 (vertical) SP constraint from node 2 to allow imposed settlement
 remove sp 2 3
 
-# Drive node 2 downward via DisplacementControl — no auxiliary load needed
-set targetSettlement -0.005
-set nSteps           100
-integrator  DisplacementControl 2 3 [expr $targetSettlement / $nSteps]
-test        NormDispIncr 1.0e-6 50 0
-algorithm   Newton
 constraints Transformation
 numberer    Plain
 system      BandGeneral
 analysis    Static
-analyze     $nSteps
-loadConst   -time 0.0
+
+set targetSettlement -0.005
+set incrS            0.00005
+set nStepsS          [expr int(abs($targetSettlement) / abs($incrS))]
+
+integrator  DisplacementControl 2 3 $incrS
+
+set ok   0
+set step 0
+
+while {$step < $nStepsS && $ok == 0} {
+
+    # Attempt 1: Newton, tight tolerance
+    test      NormDispIncr 1.0e-6 50 0
+    algorithm Newton
+    set ok [analyze 1]
+
+    if {$ok != 0} {
+        # Attempt 2: KrylovNewton, relaxed tolerance
+        puts "Settlement Newton failed at step $step — trying KrylovNewton"
+        test      NormDispIncr 1.0e-4 100 0
+        algorithm KrylovNewton
+        set ok [analyze 1]
+    }
+
+    if {$ok != 0} {
+        # Attempt 3: ModifiedNewton with sub-stepping (incrS/10)
+        puts "Settlement KrylovNewton failed at step $step — trying sub-stepping"
+        test      NormDispIncr 1.0e-4 200 0
+        algorithm ModifiedNewton -factoronce
+        integrator DisplacementControl 2 3 [expr $incrS/10.0]
+        set ok [analyze 10]
+        integrator DisplacementControl 2 3 $incrS
+    }
+
+    if {$ok != 0} {
+        puts "Settlement failed to converge at step $step — stopping."
+        break
+    }
+
+    incr step
+}
+
+if {$ok != 0} {
+    puts "Settlement stage did not complete — check material parameters or reduce increment."
+    return
+}
+
+loadConst -time 0.0
 
 # --- STAGE 3: HORIZONTAL PUSHOVER ---
 wipeAnalysis
