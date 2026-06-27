@@ -182,14 +182,17 @@ while {$step < $nSteps && $ok == 0} {
     }
 
     if {$ok != 0} {
-        # Attempt 4: Arc-Length — traces post-peak descending branch past limit point
-        puts "EnergyIncr failed at step $step — trying Arc-Length"
+        # Attempt 4: Arc-Length with UmfPack — smaller arc and full-pivot solver
+        # handles near-singular stiffness and multiple instability directions
+        puts "EnergyIncr failed at step $step — trying Arc-Length with UmfPack"
         reset
+        system    UmfPack
         test      NormDispIncr 1.0e-3 200 0
         algorithm KrylovNewton
-        integrator ArcLength [expr $incr*5.0] 1.0
+        integrator ArcLength [expr $incr*0.01] 1.0
         set ok [analyze 1]
-        # Restore DisplacementControl for subsequent steps
+        # Restore banded solver and DisplacementControl for subsequent steps
+        system    BandGeneral
         integrator DisplacementControl 4 1 $incr
     }
 
