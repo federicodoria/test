@@ -133,7 +133,7 @@ recorder Element \
 # STEP 2: GRAVITY ANALYSIS
 # --------------------------------------------------------------------------------------------------
 
-set topLoad [expr -5.0*$g*$rho*$L_span*$T_pier]
+set topLoad [expr -1.0*$g*$rho*$L_span*$T_pier]
 
 pattern Plain 10 Linear {
     eleLoad -ele 1 -type -selfWeight 0.0 0.0 [expr -$g]
@@ -179,8 +179,8 @@ loadConst -time 0.0
 #   - This avoids the large initial unbalance from suddenly releasing the support reaction
 # --------------------------------------------------------------------------------------------------
 
-set targetSettlement  0.05;   # target settlement (m) — adjust as needed
-set settlSteps        1000;   # load steps to reach full settlement
+set targetSettlement  0.005;   # target settlement (m) — adjust as needed
+set settlSteps        10000;   # load steps to reach full settlement
 
 # Remove the homogeneous (zero) fixed SP at node 2 DOF 3 before adding the ramped one
 remove sp 2 3
@@ -260,7 +260,7 @@ pattern Plain 30 Linear {
     load 4  0.5 0.0 0.0 0.0 0.0 0.0
 }
 
-set targetDisp  0.4;     # target horizontal displacement (m)
+set targetDisp  0.3;     # target horizontal displacement (m)
 set pushIncr    0.00005; # displacement increment per step (m)
 set nSteps      [expr int($targetDisp / $pushIncr)]
 
