@@ -64,8 +64,9 @@ loadConst   -time 0.0
 # --- STAGE 2: SETTLEMENT ---
 wipeAnalysis
 
-# Release vertical DOF (3) at node 2 to allow imposed settlement
-fix 2  1 1 0 1 1 1
+# Release only DOF 3 (vertical) at node 2 — remove its existing SP constraint
+# (fix cannot modify or remove constraints already in the domain)
+remove sp 2 3
 
 # Drive node 2 downward via DisplacementControl — no auxiliary load needed
 set targetSettlement -0.005
@@ -83,8 +84,9 @@ loadConst   -time 0.0
 # --- STAGE 3: HORIZONTAL PUSHOVER ---
 wipeAnalysis
 
-# Re-fix node 2 at its settled position (foundation now rigid)
-fix 2  1 1 1 1 1 1
+# Re-constrain only DOF 3 (vertical) at node 2 — DOFs 1,2,4,5,6 are still
+# constrained from Stage 1 and must not be re-added via fix (would conflict)
+sp 2 3 0.0
 
 pattern Plain 30 Linear {
     load 4  1.0 0.0 0.0  0.0 0.0 0.0
