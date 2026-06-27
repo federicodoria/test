@@ -144,16 +144,18 @@ pattern Plain 10 Linear {
     load 4  0.0 0.0 $topLoad 0.0 0.0 0.0
 }
 
-set tol  1.0e-4
-set iter 100
+# tolF : force unbalance tolerance (N) — physical and dimension-consistent
+# iter : max Newton iterations per step
+set tolF  1.0
+set iter  200
 
-system     BandGeneral
-numberer   Plain
+system      BandGeneral
+numberer    Plain
 constraints Transformation
-integrator LoadControl 1.0
-test       NormDispIncr $tol $iter 5
-algorithm  Newton
-analysis   Static
+integrator  LoadControl 1.0
+test        NormUnbalance $tolF $iter 2
+algorithm   Newton
+analysis    Static
 
 puts "Running gravity analysis..."
 set ok [analyze 1]
@@ -164,7 +166,6 @@ if {$ok != 0} {
     puts "Gravity analysis completed."
 }
 
-# Fix loads at current state; reset pseudo-time to 0
 loadConst -time 0.0
 
 # --------------------------------------------------------------------------------------------------
@@ -186,36 +187,52 @@ pattern Plain 20 Linear {
     load 2  0.0 0.0 -1.0 0.0 0.0 0.0
 }
 
-set targetSettlement  0.05;   # target settlement (m), adjust as needed
-set settlIncr         0.0001; # displacement increment per step (m)
+set targetSettlement  0.05;    # target settlement (m) — adjust as needed
+set settlIncr         0.00005; # displacement increment per step (m) — smaller for stability
 set settlSteps        [expr int($targetSettlement / $settlIncr)]
 
 system      BandGeneral
 numberer    Plain
 constraints Transformation
-test        NormDispIncr $tol $iter 5
+test        NormUnbalance $tolF $iter 2
 algorithm   Newton
 integrator  DisplacementControl 2 3 [expr -$settlIncr]
 analysis    Static
 
 puts "Running settlement analysis..."
 
-set ok [analyze $settlSteps]
+set stepS 0
+set ok    0
+while {$stepS < $settlSteps && $ok == 0} {
+    test      NormUnbalance $tolF $iter 0
+    algorithm Newton
+    set ok [analyze 1]
 
-if {$ok != 0} {
-    puts "Standard Newton failed during settlement. Switching to Newton -initial..."
-    test      NormDispIncr $tol [expr $iter*2] 5
-    algorithm Newton -initial
-    set ok [analyze $settlSteps]
+    if {$ok != 0} {
+        test      NormUnbalance $tolF $iter 0
+        algorithm Newton -initial
+        set ok [analyze 1]
+    }
+
+    if {$ok != 0} {
+        test      NormUnbalance $tolF $iter 0
+        algorithm ModifiedNewton
+        set ok [analyze 1]
+    }
+
+    if {$ok != 0} {
+        puts "Settlement failed at step $stepS — stopping settlement."
+        break
+    }
+    incr stepS
 }
 
 if {$ok != 0} {
-    puts "Settlement analysis did not fully converge."
+    puts "Settlement analysis stopped early at step $stepS of $settlSteps."
 } else {
     puts "Settlement analysis completed."
 }
 
-# Freeze all loads and reactions at post-settlement state; reset pseudo-time
 loadConst -time 0.0
 record
 
@@ -238,8 +255,8 @@ pattern Plain 30 Linear {
     load 4  0.5 0.0 0.0 0.0 0.0 0.0
 }
 
-set targetDisp  0.4;    # target horizontal displacement (m)
-set pushIncr    0.0001; # displacement increment per step (m)
+set targetDisp  0.4;     # target horizontal displacement (m)
+set pushIncr    0.00005; # displacement increment per step (m)
 set nSteps      [expr int($targetDisp / $pushIncr)]
 
 set controlled_node 4
@@ -248,24 +265,43 @@ set controlled_dof  1
 system      BandGeneral
 numberer    Plain
 constraints Transformation
-test        NormDispIncr $tol $iter 5
+test        NormUnbalance $tolF $iter 2
 algorithm   Newton
 integrator  DisplacementControl $controlled_node $controlled_dof $pushIncr
 analysis    Static
 
 puts "Running horizontal pushover..."
 
-set ok [analyze $nSteps]
+set stepP 0
+set ok    0
+while {$stepP < $nSteps && $ok == 0} {
+    test      NormUnbalance $tolF $iter 0
+    algorithm Newton
+    set ok [analyze 1]
 
-if {$ok != 0} {
-    puts "Standard Newton failed during pushover. Switching to Newton -initial..."
-    test      NormDispIncr $tol [expr $iter*2] 5
-    algorithm Newton -initial
-    set ok [analyze $nSteps]
+    if {$ok != 0} {
+        puts "Step $stepP: Newton failed — trying Newton -initial..."
+        test      NormUnbalance $tolF $iter 0
+        algorithm Newton -initial
+        set ok [analyze 1]
+    }
+
+    if {$ok != 0} {
+        puts "Step $stepP: Newton -initial failed — trying ModifiedNewton..."
+        test      NormUnbalance $tolF $iter 0
+        algorithm ModifiedNewton
+        set ok [analyze 1]
+    }
+
+    if {$ok != 0} {
+        puts "Pushover stopped at step $stepP of $nSteps — structure likely at capacity."
+        break
+    }
+    incr stepP
 }
 
 if {$ok != 0} {
-    puts "Pushover did not fully converge at target displacement."
+    puts "Pushover stopped at step $stepP (disp = [expr $stepP*$pushIncr] m)."
 } else {
     puts "Pushover analysis completed successfully."
 }
