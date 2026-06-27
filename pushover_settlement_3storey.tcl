@@ -67,22 +67,13 @@ node 16   [expr $L_span/2.0]  0.0   $H2
 node 17   [expr $L_span/2.0]  0.0   $H3
 
 # --------------------------------------------------------------------------------------------------
-# STEP 1: INITIAL BOUNDARY CONDITIONS
+# STEP 1: INITIAL BOUNDARY CONDITIONS (gravity phase only)
+# Mid-node Ry constraints are added AFTER gravity to avoid corrupting
+# the Transformation handler's condensation during gravity assembly.
 # --------------------------------------------------------------------------------------------------
 
-# Both bases fully fixed
 fix 1  1 1 1 1 1 1
 fix 2  1 1 1 1 1 1
-
-# Fix in-plane rotation (DOF 5 = Ry) at mid-height pier nodes and mid-span
-# spandrel nodes (9-17) only.
-# The Macroelement3d does not contribute Ry stiffness at the mid-node of each
-# panel, leaving a zero pivot in the system matrix for larger models.
-# Floor nodes (3-8) are left fully unconstrained so the pier-spandrel joints
-# work correctly.
-foreach n {9 10 11 12 13 14 15 16 17} {
-    fix $n  0 0 0 0 1 0
-}
 
 # --------------------------------------------------------------------------------------------------
 # MACROELEMENTS
@@ -193,6 +184,8 @@ recorder Element -file Spandrel3Force.out -time -ele 9 force
 
 # --------------------------------------------------------------------------------------------------
 # STEP 2: GRAVITY ANALYSIS
+# No mid-node constraints here: zero-stiffness out-of-plane DOFs also carry
+# zero load under gravity, so BandGeneral handles the 0/0 as 0 correctly.
 # --------------------------------------------------------------------------------------------------
 
 set topLoad [expr -1.0*$g*$rho*$L_span*$T_pier]
@@ -222,13 +215,30 @@ set iter  200
 system      BandGeneral
 numberer    Plain
 constraints Transformation
-integrator  LoadControl 1.0
+integrator  LoadControl 0.1
 test        NormUnbalance $tolF $iter 0
 algorithm   Newton
 analysis    Static
 
 puts "Running gravity analysis..."
-set ok [analyze 1]
+set ok 0
+for {set gi 0} {$gi < 10 && $ok == 0} {incr gi} {
+    set ok [analyze 1]
+    if {$ok != 0} {
+        test      NormUnbalance $tolF $iter 0
+        algorithm Newton -initial
+        set ok [analyze 1]
+    }
+    if {$ok != 0} {
+        test      NormUnbalance $tolF $iter 0
+        algorithm ModifiedNewton
+        set ok [analyze 1]
+    }
+    if {$ok != 0} {
+        puts "Gravity failed at sub-step $gi - stopping."
+        break
+    }
+}
 
 if {$ok != 0} {
     puts "Gravity analysis failed."
@@ -239,12 +249,19 @@ if {$ok != 0} {
 loadConst -time 0.0
 
 # --------------------------------------------------------------------------------------------------
-# STEP 3: RELEASE VERTICAL DOF AT NODE 2 and set up imposed settlement
+# STEP 3: ADD MID-NODE Ry CONSTRAINTS AFTER GRAVITY
+# Macroelement3d provides no Ry stiffness at mid-nodes; constraining these
+# DOFs here (after gravity) eliminates the zero pivot in settlement/pushover
+# without interfering with the gravity stiffness assembly.
+# --------------------------------------------------------------------------------------------------
+
+foreach n {9 10 11 12 13 14 15 16 17} {
+    fix $n  0 0 0 0 1 0
+}
+
+# --------------------------------------------------------------------------------------------------
+# STEP 4: RELEASE VERTICAL DOF AT NODE 2 and set up imposed settlement
 # DOF order: 1=X  2=Y  3=Z(vertical)  4=Rx  5=Ry  6=Rz
-#
-# Using sp-in-pattern + LoadControl:
-#   At load factor 0: imposed disp = 0  (no initial unbalance)
-#   At load factor 1: imposed disp = -targetSettlement
 # --------------------------------------------------------------------------------------------------
 
 set targetSettlement  0.005;   # target settlement (m)
@@ -255,7 +272,7 @@ remove sp 2 3
 wipeAnalysis
 
 # --------------------------------------------------------------------------------------------------
-# STEP 4: SETTLEMENT
+# STEP 5: SETTLEMENT
 # --------------------------------------------------------------------------------------------------
 
 pattern Plain 20 Linear {
@@ -310,13 +327,13 @@ loadConst -time 0.0
 record
 
 # --------------------------------------------------------------------------------------------------
-# STEP 5: wipeAnalysis -- frozen pattern 20 holds node 2 DOF 3 at settled value
+# STEP 6: wipeAnalysis -- frozen pattern 20 holds node 2 DOF 3 at settled value
 # --------------------------------------------------------------------------------------------------
 
 wipeAnalysis
 
 # --------------------------------------------------------------------------------------------------
-# STEP 6: HORIZONTAL PUSHOVER
+# STEP 7: HORIZONTAL PUSHOVER
 # Triangular load pattern (proportional to height):
 #   Floor 1 (h=  H_pier): 1/6 per node
 #   Floor 2 (h=2*H_pier): 2/6 per node
@@ -339,9 +356,9 @@ set nSteps      [expr int($targetDisp / $pushIncr)]
 set controlled_node 8
 set controlled_dof  1
 
-# Use a looser tolerance for the nonlinear pushover phase.
-# The base shear is ~100 kN; 100 N residual = 0.1% which is acceptable.
-set tolF_push 100.0
+# Looser tolerance for the nonlinear post-crack pushover phase.
+# 3-storey frame base shear ~200 kN; 1 kN residual = 0.5% which is acceptable.
+set tolF_push 1000.0
 
 system      BandGeneral
 numberer    Plain
