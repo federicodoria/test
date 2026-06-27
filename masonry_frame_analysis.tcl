@@ -182,16 +182,15 @@ while {$step < $nSteps && $ok == 0} {
     }
 
     if {$ok != 0} {
-        # Attempt 4: Arc-Length with UmfPack — smaller arc and full-pivot solver
-        # handles near-singular stiffness and multiple instability directions
-        puts "EnergyIncr failed at step $step — trying Arc-Length with UmfPack"
+        # Attempt 4: ArcLengthCylindrical — cylindrical constraint handles multiple
+        # simultaneous zero eigenvalues (spherical ArcLength fails with imaginary roots)
+        puts "EnergyIncr failed at step $step — trying ArcLengthCylindrical with UmfPack"
         reset
         system    UmfPack
         test      NormDispIncr 1.0e-3 200 0
         algorithm KrylovNewton
-        integrator ArcLength [expr $incr*0.01] 1.0
+        integrator ArcLengthCylindrical [expr $incr*0.1] 1.0
         set ok [analyze 1]
-        # Restore banded solver and DisplacementControl for subsequent steps
         system    BandGeneral
         integrator DisplacementControl 4 1 $incr
     }
