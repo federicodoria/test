@@ -182,14 +182,14 @@ while {$step < $nSteps && $ok == 0} {
     }
 
     if {$ok != 0} {
-        # Attempt 4: ArcLengthCylindrical — cylindrical constraint handles multiple
-        # simultaneous zero eigenvalues (spherical ArcLength fails with imaginary roots)
-        puts "EnergyIncr failed at step $step — trying ArcLengthCylindrical with UmfPack"
+        # Attempt 4: MinUnbalDispNorm — minimises unbalanced disp norm, handles limit points
+        # without arc-length discriminant; use UmfPack for near-singular stiffness
+        puts "EnergyIncr failed at step $step — trying MinUnbalDispNorm with UmfPack"
         reset
         system    UmfPack
         test      NormDispIncr 1.0e-3 200 0
         algorithm KrylovNewton
-        integrator ArcLengthCylindrical [expr $incr*0.1] 1.0
+        integrator MinUnbalDispNorm [expr $incr*0.1] 10 [expr $incr*0.001] [expr $incr*2.0]
         set ok [analyze 1]
         system    BandGeneral
         integrator DisplacementControl 4 1 $incr
