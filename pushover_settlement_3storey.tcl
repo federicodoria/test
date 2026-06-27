@@ -74,14 +74,14 @@ node 17   [expr $L_span/2.0]  0.0   $H3
 fix 1  1 1 1 1 1 1
 fix 2  1 1 1 1 1 1
 
-# Fix out-of-plane DOFs for all free nodes (wall in XZ plane):
-#   DOF 2 = Y translation (out-of-plane)
-#   DOF 4 = Rx rotation  (out-of-plane bending)
-#   DOF 6 = Rz rotation  (wall twisting)
-# The Macroelement3d is an in-plane element; without these constraints the
-# stiffness matrix is singular for larger models.
-foreach n {3 4 5 6 7 8 9 10 11 12 13 14 15 16 17} {
-    fix $n  0 1 0 1 0 1
+# Fix in-plane rotation (DOF 5 = Ry) at mid-height pier nodes and mid-span
+# spandrel nodes (9-17) only.
+# The Macroelement3d does not contribute Ry stiffness at the mid-node of each
+# panel, leaving a zero pivot in the system matrix for larger models.
+# Floor nodes (3-8) are left fully unconstrained so the pier-spandrel joints
+# work correctly.
+foreach n {9 10 11 12 13 14 15 16 17} {
+    fix $n  0 0 0 0 1 0
 }
 
 # --------------------------------------------------------------------------------------------------
@@ -339,10 +339,14 @@ set nSteps      [expr int($targetDisp / $pushIncr)]
 set controlled_node 8
 set controlled_dof  1
 
+# Use a looser tolerance for the nonlinear pushover phase.
+# The base shear is ~100 kN; 100 N residual = 0.1% which is acceptable.
+set tolF_push 100.0
+
 system      BandGeneral
 numberer    Plain
 constraints Transformation
-test        NormUnbalance $tolF $iter 0
+test        NormUnbalance $tolF_push $iter 0
 algorithm   Newton
 integrator  DisplacementControl $controlled_node $controlled_dof $pushIncr
 analysis    Static
@@ -352,20 +356,20 @@ puts "Running horizontal pushover..."
 set stepP 0
 set ok    0
 while {$stepP < $nSteps && $ok == 0} {
-    test      NormUnbalance $tolF $iter 0
+    test      NormUnbalance $tolF_push $iter 0
     algorithm Newton
     set ok [analyze 1]
 
     if {$ok != 0} {
         puts "Step $stepP: Newton failed - trying Newton -initial..."
-        test      NormUnbalance $tolF $iter 0
+        test      NormUnbalance $tolF_push $iter 0
         algorithm Newton -initial
         set ok [analyze 1]
     }
 
     if {$ok != 0} {
         puts "Step $stepP: Newton -initial failed - trying ModifiedNewton..."
-        test      NormUnbalance $tolF $iter 0
+        test      NormUnbalance $tolF_push $iter 0
         algorithm ModifiedNewton
         set ok [analyze 1]
     }
