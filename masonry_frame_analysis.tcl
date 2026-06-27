@@ -84,22 +84,62 @@ loadConst   -time 0.0
 # --- STAGE 3: HORIZONTAL PUSHOVER ---
 wipeAnalysis
 
-# Re-constrain only DOF 3 (vertical) at node 2 — DOFs 1,2,4,5,6 are still
-# constrained from Stage 1 and must not be re-added via fix (would conflict)
+# Re-constrain DOF 3 only — DOFs 1,2,4,5,6 remain from Stage 1
 sp 2 3 0.0
 
 pattern Plain 30 Linear {
     load 4  1.0 0.0 0.0  0.0 0.0 0.0
 }
-set targetDisp 0.4
-set incr       0.0001
-set nSteps     [expr int($targetDisp / $incr)]
-integrator  DisplacementControl 4 1 $incr
-test        NormDispIncr 1.0e-6 50 0
-algorithm   Newton
+
 constraints Transformation
 numberer    Plain
 system      BandGeneral
-analysis    Static
-analyze     $nSteps
-puts "Analysis completed."
+
+set targetDisp 0.4
+set incr       0.0001
+set nSteps     [expr int($targetDisp / $incr)]
+
+integrator  DisplacementControl 4 1 $incr
+
+# Adaptive pushover loop with algorithm and step-size fallbacks
+set ok 0
+set step 0
+
+while {$step < $nSteps && $ok == 0} {
+
+    # --- Attempt 1: Newton, tight tolerance ---
+    test      NormDispIncr 1.0e-6 50 0
+    algorithm Newton
+    set ok [analyze 1]
+
+    if {$ok != 0} {
+        # --- Attempt 2: KrylovNewton, relaxed tolerance, more iterations ---
+        puts "Newton failed at step $step — trying KrylovNewton"
+        test      NormDispIncr 1.0e-4 100 0
+        algorithm KrylovNewton
+        set ok [analyze 1]
+    }
+
+    if {$ok != 0} {
+        # --- Attempt 3: smaller sub-steps with ModifiedNewton ---
+        puts "KrylovNewton failed at step $step — trying sub-stepping"
+        test      NormDispIncr 1.0e-4 200 0
+        algorithm ModifiedNewton -factoronce
+        integrator DisplacementControl 4 1 [expr $incr/10.0]
+        set ok [analyze 10]
+        integrator DisplacementControl 4 1 $incr
+    }
+
+    if {$ok != 0} {
+        puts "Analysis failed to converge at step $step — stopping."
+        break
+    }
+
+    incr step
+}
+
+if {$ok == 0} {
+    puts "Pushover analysis completed successfully."
+} else {
+    puts "Pushover stopped at step $step of $nSteps due to non-convergence."
+}
