@@ -78,6 +78,12 @@ node 17   [expr $L_span/2.0]  0.0   $H3
 fix 1  1 1 1 1 1 1
 fix 2  1 1 1 1 1 1
 
+# Mid-nodes: fix Uy(2), Rx(4), Ry(5), Rz(6) — element condensation uses only
+# translational DOFs at mid-node; all rotational DOFs have zero stiffness there.
+foreach n {9 10 11 12 13 14 15 16 17} {
+    fix $n  0 1 0 1 1 1
+}
+
 # --------------------------------------------------------------------------------------------------
 # MACROELEMENTS
 # Piers    : local axis 1 = 0 0 1 (vertical Z), local axis 2 = 0 1 0
