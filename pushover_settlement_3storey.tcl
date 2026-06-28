@@ -67,19 +67,33 @@ node 16   [expr $L_span/2.0]  0.0   $H2
 node 17   [expr $L_span/2.0]  0.0   $H3
 
 # --------------------------------------------------------------------------------------------------
-# STEP 1: INITIAL BOUNDARY CONDITIONS (gravity phase only)
-# Mid-node Ry constraints are added AFTER gravity to avoid corrupting
-# the Transformation handler's condensation during gravity assembly.
+# BOUNDARY CONDITIONS
+# -pDelta is NOT used: its 3D geometric stiffness couples in-plane axial force
+# to out-of-plane DOFs, creating irresolvable residuals when those DOFs are
+# constrained.  Without -pDelta the out-of-plane DOFs are strictly uncoupled
+# and can be constrained here from the start.
+#
+# Base nodes fully fixed.
+# Floor nodes (3-8): fix Uy(2), Rx(4), Rz(6) - no out-of-plane stiffness.
+# Mid-nodes (9-17): fix Uy(2), Rx(4), Ry(5), Rz(6) - element provides no
+#                   stiffness at mid-node for these DOFs.
 # --------------------------------------------------------------------------------------------------
 
 fix 1  1 1 1 1 1 1
 fix 2  1 1 1 1 1 1
 
+foreach n {3 4 5 6 7 8} {
+    fix $n  0 1 0 1 0 1
+}
+foreach n {9 10 11 12 13 14 15 16 17} {
+    fix $n  0 1 0 1 1 1
+}
+
 # --------------------------------------------------------------------------------------------------
 # MACROELEMENTS
 # Piers    : local axis 1 = 0 0 1 (vertical Z), local axis 2 = 0 1 0
 # Spandrels: local axis 1 = 1 0 0 (horizontal X), local axis 2 = 0 1 0
-# Connectivity: nodeI  nodeJ  nodeMid
+# -pDelta omitted (see boundary condition note above)
 # --------------------------------------------------------------------------------------------------
 
 element Macroelement3d 1 \
@@ -89,7 +103,7 @@ element Macroelement3d 1 \
     -tremuri \
     $H_pier $L_pier $T_pier \
     $E $G $fc $mu0 $c $Gc $beta \
-    -density $rho -cmass -pDelta
+    -density $rho -cmass
 
 element Macroelement3d 2 \
     2 4 10 \
@@ -98,7 +112,7 @@ element Macroelement3d 2 \
     -tremuri \
     $H_pier $L_pier $T_pier \
     $E $G $fc $mu0 $c $Gc $beta \
-    -density $rho -cmass -pDelta
+    -density $rho -cmass
 
 element Macroelement3d 3 \
     3 5 11 \
@@ -107,7 +121,7 @@ element Macroelement3d 3 \
     -tremuri \
     $H_pier $L_pier $T_pier \
     $E $G $fc $mu0 $c $Gc $beta \
-    -density $rho -cmass -pDelta
+    -density $rho -cmass
 
 element Macroelement3d 4 \
     4 6 12 \
@@ -116,7 +130,7 @@ element Macroelement3d 4 \
     -tremuri \
     $H_pier $L_pier $T_pier \
     $E $G $fc $mu0 $c $Gc $beta \
-    -density $rho -cmass -pDelta
+    -density $rho -cmass
 
 element Macroelement3d 5 \
     5 7 13 \
@@ -125,7 +139,7 @@ element Macroelement3d 5 \
     -tremuri \
     $H_pier $L_pier $T_pier \
     $E $G $fc $mu0 $c $Gc $beta \
-    -density $rho -cmass -pDelta
+    -density $rho -cmass
 
 element Macroelement3d 6 \
     6 8 14 \
@@ -134,7 +148,7 @@ element Macroelement3d 6 \
     -tremuri \
     $H_pier $L_pier $T_pier \
     $E $G $fc $mu0 $c $Gc $beta \
-    -density $rho -cmass -pDelta
+    -density $rho -cmass
 
 element Macroelement3d 7 \
     3 4 15 \
@@ -143,7 +157,7 @@ element Macroelement3d 7 \
     -tremuri \
     $H_span $L_span $T_pier \
     $E $G $fc $mu0 $c $Gc $beta \
-    -density $rho -cmass -pDelta
+    -density $rho -cmass
 
 element Macroelement3d 8 \
     5 6 16 \
@@ -152,7 +166,7 @@ element Macroelement3d 8 \
     -tremuri \
     $H_span $L_span $T_pier \
     $E $G $fc $mu0 $c $Gc $beta \
-    -density $rho -cmass -pDelta
+    -density $rho -cmass
 
 element Macroelement3d 9 \
     7 8 17 \
@@ -161,16 +175,16 @@ element Macroelement3d 9 \
     -tremuri \
     $H_span $L_span $T_pier \
     $E $G $fc $mu0 $c $Gc $beta \
-    -density $rho -cmass -pDelta
+    -density $rho -cmass
 
 # --------------------------------------------------------------------------------------------------
 # RECORDERS
 # --------------------------------------------------------------------------------------------------
 
-recorder Node -file TopDisp.out       -time -node 8      -dof 1   disp
-recorder Node -file FloorDisp.out     -time -node 4 6 8  -dof 1   disp
-recorder Node -file BaseReaction.out  -time -node 1 2    -dof 1 3 reaction
-recorder Node -file SettlementDisp.out -time -node 2     -dof 3   disp
+recorder Node -file TopDisp.out        -time -node 8      -dof 1   disp
+recorder Node -file FloorDisp.out      -time -node 4 6 8  -dof 1   disp
+recorder Node -file BaseReaction.out   -time -node 1 2    -dof 1 3 reaction
+recorder Node -file SettlementDisp.out -time -node 2      -dof 3   disp
 
 recorder Element -file Pier1Force.out     -time -ele 1 force
 recorder Element -file Pier2Force.out     -time -ele 2 force
@@ -184,8 +198,6 @@ recorder Element -file Spandrel3Force.out -time -ele 9 force
 
 # --------------------------------------------------------------------------------------------------
 # STEP 2: GRAVITY ANALYSIS
-# No mid-node constraints here: zero-stiffness out-of-plane DOFs also carry
-# zero load under gravity, so BandGeneral handles the 0/0 as 0 correctly.
 # --------------------------------------------------------------------------------------------------
 
 set topLoad [expr -1.0*$g*$rho*$L_span*$T_pier]
@@ -249,37 +261,17 @@ if {$ok != 0} {
 loadConst -time 0.0
 
 # --------------------------------------------------------------------------------------------------
-# STEP 3: CONSTRAIN ALL ZERO-STIFFNESS DOFs AFTER GRAVITY
-# Macroelement3d is strictly in-plane (X-Z); it provides no stiffness in
-# DOFs 2 (Uy), 4 (Rx), 6 (Rz) at ANY node, and no stiffness in DOF 5 (Ry)
-# at mid-nodes.  All of these are truly zero (UmfPack error 1 confirms it).
-# Constraining them here is safe: they carry no force and the elements never
-# use them.  Settlement and pushover then use UmfPack on the reduced system.
+# STEP 3: RELEASE VERTICAL DOF AT NODE 2 FOR SETTLEMENT
 # --------------------------------------------------------------------------------------------------
 
-# Floor nodes: fix out-of-plane DOFs (Uy=2, Rx=4, Rz=6)
-foreach n {3 4 5 6 7 8} {
-    fix $n  0 1 0 1 0 1
-}
-# Mid-nodes: fix out-of-plane DOFs AND Ry (no in-plane bending at mid-node)
-foreach n {9 10 11 12 13 14 15 16 17} {
-    fix $n  0 1 0 1 1 1
-}
-
-# --------------------------------------------------------------------------------------------------
-# STEP 4: RELEASE VERTICAL DOF AT NODE 2 and set up imposed settlement
-# DOF order: 1=X  2=Y  3=Z(vertical)  4=Rx  5=Ry  6=Rz
-# --------------------------------------------------------------------------------------------------
-
-set targetSettlement  0.005;   # target settlement (m)
-set settlSteps        10000;   # load steps to reach full settlement
+set targetSettlement  0.005
+set settlSteps        10000
 
 remove sp 2 3
-
 wipeAnalysis
 
 # --------------------------------------------------------------------------------------------------
-# STEP 5: SETTLEMENT
+# STEP 4: SETTLEMENT
 # --------------------------------------------------------------------------------------------------
 
 pattern Plain 20 Linear {
@@ -288,7 +280,7 @@ pattern Plain 20 Linear {
 
 set settlIncr [expr 1.0 / $settlSteps]
 
-system      UmfPack
+system      BandGeneral
 numberer    Plain
 constraints Transformation
 test        NormUnbalance $tolF $iter 0
@@ -304,19 +296,16 @@ while {$stepS < $settlSteps && $ok == 0} {
     test      NormUnbalance $tolF $iter 0
     algorithm Newton
     set ok [analyze 1]
-
     if {$ok != 0} {
         test      NormUnbalance $tolF $iter 0
         algorithm Newton -initial
         set ok [analyze 1]
     }
-
     if {$ok != 0} {
         test      NormUnbalance $tolF $iter 0
         algorithm ModifiedNewton
         set ok [analyze 1]
     }
-
     if {$ok != 0} {
         puts "Settlement failed at step $stepS - stopping."
         break
@@ -332,15 +321,10 @@ if {$ok != 0} {
 
 loadConst -time 0.0
 record
-
-# --------------------------------------------------------------------------------------------------
-# STEP 6: wipeAnalysis -- frozen pattern 20 holds node 2 DOF 3 at settled value
-# --------------------------------------------------------------------------------------------------
-
 wipeAnalysis
 
 # --------------------------------------------------------------------------------------------------
-# STEP 7: HORIZONTAL PUSHOVER
+# STEP 5: HORIZONTAL PUSHOVER
 # Triangular load pattern (proportional to height):
 #   Floor 1 (h=  H_pier): 1/6 per node
 #   Floor 2 (h=2*H_pier): 2/6 per node
@@ -356,18 +340,15 @@ pattern Plain 30 Linear {
     load 8  [expr 3.0/6.0]  0.0 0.0 0.0 0.0 0.0
 }
 
-set targetDisp  0.2;     # target horizontal roof displacement (m)
-set pushIncr    0.00005; # displacement increment per step (m)
+set targetDisp  0.2
+set pushIncr    0.00005
 set nSteps      [expr int($targetDisp / $pushIncr)]
 
 set controlled_node 8
 set controlled_dof  1
-
-# Looser tolerance for the nonlinear post-crack pushover phase.
-# 3-storey frame base shear ~200 kN; 1 kN residual = 0.5% which is acceptable.
 set tolF_push 1000.0
 
-system      UmfPack
+system      BandGeneral
 numberer    Plain
 constraints Transformation
 test        NormUnbalance $tolF_push $iter 0
@@ -383,21 +364,18 @@ while {$stepP < $nSteps && $ok == 0} {
     test      NormUnbalance $tolF_push $iter 0
     algorithm Newton
     set ok [analyze 1]
-
     if {$ok != 0} {
         puts "Step $stepP: Newton failed - trying Newton -initial..."
         test      NormUnbalance $tolF_push $iter 0
         algorithm Newton -initial
         set ok [analyze 1]
     }
-
     if {$ok != 0} {
         puts "Step $stepP: Newton -initial failed - trying ModifiedNewton..."
         test      NormUnbalance $tolF_push $iter 0
         algorithm ModifiedNewton
         set ok [analyze 1]
     }
-
     if {$ok != 0} {
         puts "Pushover stopped at step $stepP - structure likely at capacity."
         break
