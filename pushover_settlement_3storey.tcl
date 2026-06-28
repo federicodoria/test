@@ -89,42 +89,41 @@ for {set sit 0} {$sit < $max_sit} {incr sit} {
     fix  1  1 1 1 1 1 1   ;# left base  — fully fixed
     fix  2  1 1 0 1 1 1   ;# right base — free in Z (spring controls settlement)
     fix 18  1 1 1 1 1 1   ;# anchor     — fully fixed
-
-    foreach n {3 4 5 6 7 8}               { fix $n  0 1 0 1 0 1 }
-    foreach n {9 10 11 12 13 14 15 16 17} { fix $n  0 1 0 1 1 1 }
+    # No constraints at floor/mid nodes: -pDelta geometric stiffness handles
+    # out-of-plane DOFs (same strategy as the working 1-storey model)
 
     # ---- Vertical spring (ZeroLength) ----
     uniaxialMaterial Elastic 1 $k_spring
     element zeroLength 10  2 18  -mat 1  -dir 3
 
-    # ---- Macroelements (no -pDelta) ----
+    # ---- Macroelements (with -pDelta) ----
     element Macroelement3d 1 \
         1 3 9   0.0 0.0 1.0  0.0 1.0 0.0  -tremuri \
-        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass
+        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
     element Macroelement3d 2 \
         2 4 10  0.0 0.0 1.0  0.0 1.0 0.0  -tremuri \
-        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass
+        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
     element Macroelement3d 3 \
         3 5 11  0.0 0.0 1.0  0.0 1.0 0.0  -tremuri \
-        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass
+        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
     element Macroelement3d 4 \
         4 6 12  0.0 0.0 1.0  0.0 1.0 0.0  -tremuri \
-        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass
+        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
     element Macroelement3d 5 \
         5 7 13  0.0 0.0 1.0  0.0 1.0 0.0  -tremuri \
-        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass
+        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
     element Macroelement3d 6 \
         6 8 14  0.0 0.0 1.0  0.0 1.0 0.0  -tremuri \
-        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass
+        $H_pier $L_pier $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
     element Macroelement3d 7 \
         3 4 15  1.0 0.0 0.0  0.0 1.0 0.0  -tremuri \
-        $H_span $L_span $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass
+        $H_span $L_span $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
     element Macroelement3d 8 \
         5 6 16  1.0 0.0 0.0  0.0 1.0 0.0  -tremuri \
-        $H_span $L_span $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass
+        $H_span $L_span $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
     element Macroelement3d 9 \
         7 8 17  1.0 0.0 0.0  0.0 1.0 0.0  -tremuri \
-        $H_span $L_span $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass
+        $H_span $L_span $T_pier  $E $G $fc $mu0 $c $Gc $beta  -density $rho -cmass -pDelta
 
     # ---- Gravity loads ----
     pattern Plain 10 Linear {
@@ -150,7 +149,7 @@ for {set sit 0} {$sit < $max_sit} {incr sit} {
     numberer    Plain
     constraints Transformation
     integrator  LoadControl 0.1
-    test        NormUnbalance $tolF_grav $iter 0
+    test        NormUnbalance $tolF $iter 0
     algorithm   Newton
     analysis    Static
 
@@ -159,18 +158,18 @@ for {set sit 0} {$sit < $max_sit} {incr sit} {
     for {set gi 0} {$gi < 10 && $ok == 0} {incr gi} {
         set ok [analyze 1]
         if {$ok != 0} {
-            test      NormUnbalance $tolF_grav $iter 0
+            test      NormUnbalance $tolF $iter 0
             algorithm Newton -initial
             set ok [analyze 1]
         }
         if {$ok != 0} {
-            test      NormUnbalance $tolF_grav $iter 0
+            test      NormUnbalance $tolF $iter 0
             algorithm ModifiedNewton
             set ok [analyze 1]
         }
         if {$ok != 0} { puts "Gravity failed at sub-step $gi"; break }
         algorithm Newton
-        test      NormUnbalance $tolF_grav $iter 0
+        test      NormUnbalance $tolF $iter 0
     }
 
     if {$ok != 0} { puts "Gravity failed — stopping."; break }
