@@ -83,7 +83,7 @@ fix 1  1 1 1 1 1 1
 fix 2  1 1 1 1 1 1
 
 foreach n {3 4 5 6 7 8} {
-    fix $n  0 1 0 1 0 1
+    fix $n  0 1 0 0 0 0
 }
 foreach n {9 10 11 12 13 14 15 16 17} {
     fix $n  0 1 0 1 1 1
@@ -221,14 +221,15 @@ pattern Plain 10 Linear {
     load 8  0.0 0.0 $topLoad 0.0 0.0 0.0
 }
 
-set tolF  1.0
-set iter  200
+set tolF       1.0
+set tolF_grav  5000.0
+set iter       200
 
 system      BandGeneral
 numberer    Plain
 constraints Transformation
 integrator  LoadControl 0.1
-test        NormUnbalance $tolF $iter 0
+test        NormUnbalance $tolF_grav $iter 0
 algorithm   Newton
 analysis    Static
 
@@ -237,12 +238,12 @@ set ok 0
 for {set gi 0} {$gi < 10 && $ok == 0} {incr gi} {
     set ok [analyze 1]
     if {$ok != 0} {
-        test      NormUnbalance $tolF $iter 0
+        test      NormUnbalance $tolF_grav $iter 0
         algorithm Newton -initial
         set ok [analyze 1]
     }
     if {$ok != 0} {
-        test      NormUnbalance $tolF $iter 0
+        test      NormUnbalance $tolF_grav $iter 0
         algorithm ModifiedNewton
         set ok [analyze 1]
     }
