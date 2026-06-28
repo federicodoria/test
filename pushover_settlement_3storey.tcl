@@ -349,7 +349,7 @@ pattern Plain 30 Linear {
     load 8  [expr 3.0/6.0]  0.0 0.0 0.0 0.0 0.0
 }
 
-set targetDisp  0.3;     # target horizontal roof displacement (m)
+set targetDisp  0.2;     # target horizontal roof displacement (m)
 set pushIncr    0.00005; # displacement increment per step (m)
 set nSteps      [expr int($targetDisp / $pushIncr)]
 
