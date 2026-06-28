@@ -249,14 +249,22 @@ if {$ok != 0} {
 loadConst -time 0.0
 
 # --------------------------------------------------------------------------------------------------
-# STEP 3: ADD MID-NODE Ry CONSTRAINTS AFTER GRAVITY
-# Macroelement3d provides no Ry stiffness at mid-nodes; constraining these
-# DOFs here (after gravity) eliminates the zero pivot in settlement/pushover
-# without interfering with the gravity stiffness assembly.
+# STEP 3: ADD OUT-OF-PLANE + MID-NODE CONSTRAINTS AFTER GRAVITY
+# Macroelement3d is purely in-plane (X-Z), so DOFs 2 (Uy), 4 (Rx), 6 (Rz)
+# have zero stiffness at every free node, and DOF 5 (Ry) is additionally zero
+# at mid-nodes.  Under gravity these zero-stiffness DOFs also carry zero load
+# (0/0=0, handled correctly), but DisplacementControl's RHS modification exposes
+# the zero pivots.  Constraining all of them here, after gravity is frozen,
+# is safe: it removes DOFs that carry no force and have no stiffness.
 # --------------------------------------------------------------------------------------------------
 
+# Floor nodes: fix out-of-plane DOFs only (DOF 5 = Ry is in-plane bending here)
+foreach n {3 4 5 6 7 8} {
+    fix $n  0 1 0 1 0 1
+}
+# Mid-nodes: fix out-of-plane DOFs AND Ry (no in-plane bending stiffness at mid-node)
 foreach n {9 10 11 12 13 14 15 16 17} {
-    fix $n  0 0 0 0 1 0
+    fix $n  0 1 0 1 1 1
 }
 
 # --------------------------------------------------------------------------------------------------
