@@ -249,17 +249,19 @@ if {$ok != 0} {
 loadConst -time 0.0
 
 # --------------------------------------------------------------------------------------------------
-# STEP 3: CONSTRAIN ALL ZERO-STIFFNESS DOFs AT MID-NODES AFTER GRAVITY
-# P-Delta acts between end nodes (I,J) only -- mid-nodes carry NO geometric
-# stiffness in any out-of-plane or rotational DOF.  DOFs 2 (Uy), 4 (Rx), 5 (Ry),
-# 6 (Rz) are all truly zero at mid-nodes, causing UmfPack singular matrix.
-# Constraining them here (after gravity) is safe: zero stiffness, zero force.
-# Only DOFs 1 (Ux) and 3 (Uz) remain free at mid-nodes (in-plane translations
-# used by the element for shear and rocking).
-# Floor nodes (3-8) are NOT constrained: they get small P-Delta stiffness in
-# their out-of-plane DOFs from the connected pier/spandrel elements.
+# STEP 3: CONSTRAIN ALL ZERO-STIFFNESS DOFs AFTER GRAVITY
+# Macroelement3d is strictly in-plane (X-Z); it provides no stiffness in
+# DOFs 2 (Uy), 4 (Rx), 6 (Rz) at ANY node, and no stiffness in DOF 5 (Ry)
+# at mid-nodes.  All of these are truly zero (UmfPack error 1 confirms it).
+# Constraining them here is safe: they carry no force and the elements never
+# use them.  Settlement and pushover then use UmfPack on the reduced system.
 # --------------------------------------------------------------------------------------------------
 
+# Floor nodes: fix out-of-plane DOFs (Uy=2, Rx=4, Rz=6)
+foreach n {3 4 5 6 7 8} {
+    fix $n  0 1 0 1 0 1
+}
+# Mid-nodes: fix out-of-plane DOFs AND Ry (no in-plane bending at mid-node)
 foreach n {9 10 11 12 13 14 15 16 17} {
     fix $n  0 1 0 1 1 1
 }
