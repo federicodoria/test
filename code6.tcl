@@ -24,8 +24,10 @@ set rho     1200.0
 set g          9.81
 
 set targetSettlement  0.005
-set tolF              1.0
-set iter             200
+set tolF              1.0      ;# gravity unbalance tolerance (N) — tight is fine for elastic gravity
+set tolF_push        50.0      ;# pushover unbalance tolerance (N) — ~0.8 % of peak shear
+set tolD_push         1.0e-6   ;# pushover displacement-increment tolerance (m)
+set iter             500       ;# max iterations (increased from 200)
 
 set topLoad [expr -1.0*$g*$rho*$L_span*$T_pier]
 
@@ -170,14 +172,13 @@ pattern Plain 30 Linear {
 }
 
 set targetDisp   0.3
-set pushIncr     0.0001     ;# base increment (m) — 4× larger than before
-set minIncr      1.0e-7     ;# abort if step shrinks below this
-set nSteps       [expr int($targetDisp / $pushIncr)]
+set pushIncr     0.0001     ;# base displacement increment (m)
+set minIncr      1.0e-8     ;# minimum increment before giving up
 
 system      UmfPack
 numberer    Plain
 constraints Transformation
-test        NormUnbalance $tolF $iter 0
+test        NormUnbalance $tolF_push $iter 0
 algorithm   Newton
 integrator  DisplacementControl 4 1 $pushIncr
 analysis    Static
@@ -189,54 +190,70 @@ set ok          0
 set currentIncr $pushIncr
 set dispDone    0.0
 
-while {$dispDone < $targetDisp} {
+proc tryStep {incr tolF tolD nIter} {
+    integrator DisplacementControl 4 1 $incr
 
-    # --- try Newton ---
-    integrator DisplacementControl 4 1 $currentIncr
-    test      NormUnbalance $tolF $iter 0
+    # attempt 1 — Newton, NormUnbalance
+    test      NormUnbalance $tolF $nIter 0
     algorithm Newton
     set ok [analyze 1]
+    if {$ok == 0} { return 0 }
 
-    # --- fallback: Newton -initial ---
-    if {$ok != 0} {
-        test      NormUnbalance $tolF $iter 0
-        algorithm Newton -initial
-        set ok [analyze 1]
-    }
+    # attempt 2 — Newton -initial, NormUnbalance
+    test      NormUnbalance $tolF $nIter 0
+    algorithm Newton -initial
+    set ok [analyze 1]
+    if {$ok == 0} { return 0 }
 
-    # --- fallback: KrylovNewton ---
-    if {$ok != 0} {
-        test      NormUnbalance $tolF $iter 0
-        algorithm KrylovNewton
-        set ok [analyze 1]
-    }
+    # attempt 3 — KrylovNewton, NormUnbalance
+    test      NormUnbalance $tolF $nIter 0
+    algorithm KrylovNewton
+    set ok [analyze 1]
+    if {$ok == 0} { return 0 }
 
-    # --- fallback: ModifiedNewton ---
-    if {$ok != 0} {
-        test      NormUnbalance $tolF $iter 0
-        algorithm ModifiedNewton
-        set ok [analyze 1]
-    }
+    # attempt 4 — ModifiedNewton, NormUnbalance (looser: 10×)
+    test      NormUnbalance [expr $tolF * 10.0] $nIter 0
+    algorithm ModifiedNewton
+    set ok [analyze 1]
+    if {$ok == 0} { return 0 }
+
+    # attempt 5 — Newton, NormDispIncr (switch test type entirely)
+    test      NormDispIncr $tolD $nIter 0
+    algorithm Newton
+    set ok [analyze 1]
+    if {$ok == 0} { return 0 }
+
+    # attempt 6 — ModifiedNewton, NormDispIncr
+    test      NormDispIncr $tolD $nIter 0
+    algorithm ModifiedNewton
+    set ok [analyze 1]
+    return $ok
+}
+
+while {$dispDone < $targetDisp} {
+
+    set ok [tryStep $currentIncr $tolF_push $tolD_push $iter]
 
     if {$ok == 0} {
-        # step converged — accumulate displacement and restore base increment
         set dispDone    [expr $dispDone + $currentIncr]
-        set currentIncr $pushIncr
         incr stepP
+        if {$currentIncr < $pushIncr} {
+            puts "  Step $stepP converged at incr=[format %.2e $currentIncr]  dispDone=[format %.5f $dispDone] m"
+        }
+        set currentIncr $pushIncr   ;# restore base increment after a successful bisected step
     } else {
-        # bisect the step size
         set currentIncr [expr $currentIncr / 2.0]
         if {$currentIncr < $minIncr} {
-            puts "Pushover stopped: step < minIncr at disp = [format %.5f $dispDone] m  (base shear load factor ~ [format %.1f [expr $stepP*$pushIncr]] m done)"
+            puts "Pushover stopped: all algorithms failed at disp = [format %.5f $dispDone] m"
             break
         }
-        puts "Step $stepP: bisecting → incr = [format %.2e $currentIncr] m"
+        puts "Step $stepP: all failed — bisecting to incr = [format %.2e $currentIncr] m"
     }
 }
 
 if {$dispDone >= $targetDisp} {
-    puts "Pushover completed successfully ([format %.3f $dispDone] m)."
+    puts "Pushover completed successfully ([format %.4f $dispDone] m)."
 } else {
-    puts "Pushover ended at disp = [format %.5f $dispDone] m."
+    puts "Pushover ended at disp = [format %.5f $dispDone] m  after $stepP converged steps."
 }
 puts "All analyses done."
