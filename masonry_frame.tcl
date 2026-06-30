@@ -127,26 +127,40 @@ for {set sit 0} {$sit < $max_sit} {incr sit} {
     system      UmfPack
     numberer    Plain
     constraints Transformation
-    integrator  LoadControl 0.1
     test        NormUnbalance $tolF $iter 0
     algorithm   Newton
     analysis    Static
 
     puts "--- Spring iter $sit  (k = [format %.3e $k_spring] N/m) ---"
+
+    # Adaptive gravity: try coarse steps first, subdivide on failure
     set ok 0
-    for {set gi 0} {$gi < 10 && $ok == 0} {incr gi} {
+    set gStep 0.1
+    set gLF   0.0
+    while {$gLF < 1.0 - 1e-10 && $ok == 0} {
+        set remain [expr 1.0 - $gLF]
+        set inc    [expr ($gStep < $remain) ? $gStep : $remain]
+        integrator LoadControl $inc
+        test       NormUnbalance $tolF $iter 0
+        algorithm  Newton
         set ok [analyze 1]
         if {$ok != 0} {
-            test      NormUnbalance $tolF $iter 0
             algorithm Newton -initial
             set ok [analyze 1]
         }
         if {$ok != 0} {
-            test      NormUnbalance $tolF $iter 0
             algorithm ModifiedNewton
             set ok [analyze 1]
         }
-        if {$ok != 0} { puts "Gravity failed at sub-step $gi"; break }
+        if {$ok != 0 && $gStep > 0.01} {
+            # subdivide: retry current increment with half step size
+            set gStep [expr $gStep / 2.0]
+            set ok 0
+            continue
+        }
+        if {$ok != 0} { puts "Gravity failed at LF=[format %.3f [expr $gLF+$inc]]"; break }
+        set gLF   [expr $gLF + $inc]
+        set gStep 0.1
         algorithm Newton
         test      NormUnbalance $tolF $iter 0
     }
