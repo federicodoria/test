@@ -262,46 +262,70 @@ pattern Plain 30 Linear {
     load 13  [expr 3.0/6.0]  0.0 0.0 0.0 0.0 0.0
 }
 
+set ctrlNode    13
+set ctrlDOF     1
 set targetDisp  0.3
 set pushIncr    0.00005
-set nSteps      [expr int($targetDisp / $pushIncr)]
+set minIncr     [expr $pushIncr/64.0]
+set growEvery   10
+
+set curIncr $pushIncr
 
 system      UmfPack
 numberer    Plain
 constraints Transformation
-test        NormUnbalance $tolF $iter 0
-algorithm   Newton
-integrator  DisplacementControl 13 1 $pushIncr
+integrator  DisplacementControl $ctrlNode $ctrlDOF $curIncr
 analysis    Static
 
 puts "Running horizontal pushover..."
 
-set stepP 0
-set ok    0
-while {$stepP < $nSteps && $ok == 0} {
-    test      NormUnbalance $tolF $iter 0
-    algorithm Newton
-    set ok [analyze 1]
-    if {$ok != 0} {
-        puts "Step $stepP: Newton failed → Newton -initial"
-        test      NormUnbalance $tolF $iter 0
-        algorithm Newton -initial
-        set ok [analyze 1]
+# Adaptive step-halving + algorithm fallback chain: on failure at the
+# current increment, cycle through progressively more robust algorithms;
+# if none converge, halve the increment and retry the same displacement
+# level. After enough consecutive successes, grow the increment back
+# toward pushIncr.
+
+set curDisp   0.0
+set goodCount 0
+set stepOk    0
+
+while {$curDisp < $targetDisp} {
+
+    set stepOk 1
+    foreach alg {Newton {Newton -initial} KrylovNewton NewtonLineSearch ModifiedNewton} {
+        test NormUnbalance $tolF $iter 0
+        eval algorithm $alg
+        set stepOk [analyze 1]
+        if {$stepOk == 0} { break }
     }
-    if {$ok != 0} {
-        puts "Step $stepP: Newton -initial failed → ModifiedNewton"
-        test      NormUnbalance $tolF $iter 0
-        algorithm ModifiedNewton
-        set ok [analyze 1]
+
+    if {$stepOk != 0} {
+        set curIncr [expr $curIncr/2.0]
+        if {$curIncr < $minIncr} {
+            puts "Pushover stopped: increment below minimum ([format %.3e $minIncr] m) at disp = [format %.5f $curDisp] m."
+            break
+        }
+        puts "Step failed at disp = [format %.5f $curDisp] m -> halving increment to [format %.3e $curIncr] m"
+        integrator DisplacementControl $ctrlNode $ctrlDOF $curIncr
+        set goodCount 0
+        continue
     }
-    if {$ok != 0} {
-        puts "Pushover stopped at step $stepP (disp = [expr $stepP*$pushIncr] m)."
-        break
+
+    set curDisp [expr $curDisp + $curIncr]
+    incr goodCount
+
+    if {$goodCount >= $growEvery && $curIncr < $pushIncr} {
+        set curIncr [expr $curIncr*2.0]
+        if {$curIncr > $pushIncr} { set curIncr $pushIncr }
+        integrator DisplacementControl $ctrlNode $ctrlDOF $curIncr
+        puts "Recovered: growing increment back to [format %.3e $curIncr] m at disp = [format %.5f $curDisp] m"
+        set goodCount 0
     }
-    incr stepP
 }
 
-if {$ok == 0} {
-    puts "Pushover completed successfully ([format %.3f [expr $nSteps*$pushIncr]] m)."
+if {$stepOk == 0} {
+    puts "Pushover completed successfully ([format %.5f $curDisp] m)."
+} else {
+    puts "Pushover stopped early at disp = [format %.5f $curDisp] m."
 }
 puts "All analyses done."
