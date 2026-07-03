@@ -55,7 +55,7 @@ set beta       0.30
 set rho     1200.0
 set g          9.81
 
-set targetSettlement  0.001
+set targetSettlement  0.002
 set iter             1000
 
 set topLoad [expr -1.0*$g*$rho*$L_span*$T_pier]
