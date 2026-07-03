@@ -55,8 +55,7 @@ set beta       0.30
 set rho     1200.0
 set g          9.81
 
-set targetSettlement  0.02
-set tolF              0.001
+set targetSettlement  0.001
 set iter             1000
 
 set topLoad [expr -1.0*$g*$rho*$L_span*$T_pier]
@@ -69,8 +68,16 @@ set R_est [expr   3.0*$rho*$g*$H_pier*$L_pier*$T_pier \
                + 1.5*$rho*$g*$H_span*$L_span*$T_pier \
                + 3.0*abs($topLoad)]
 set k_spring [expr $R_est / $targetSettlement]
+
+# Force tolerance scaled to the structure's own force level (NOT to the
+# settlement value) so this stays valid whether targetSettlement is
+# 0.001 m or 0.005 m — the residual force scale doesn't change, only how
+# much nonlinearity/damage builds up before it's reached.
+set tolF [expr 1.0e-4 * $R_est]
+
 puts "Estimated reaction at right base node (node 3) : [format %.0f $R_est] N"
 puts "Initial spring stiffness                       : [format %.3e $k_spring] N/m"
+puts "Force convergence tolerance (tolF)             : [format %.3e $tolF] N"
 
 # ---------------------------------------------------------------------------
 # SPRING-GRAVITY ITERATION LOOP
