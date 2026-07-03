@@ -330,44 +330,68 @@ pattern Plain 30 Linear {
 
 set targetDisp  0.3
 set pushIncr    0.00005
-set nSteps      [expr int($targetDisp / $pushIncr)]
+set minIncr     0.0000005
 
 system      UmfPack
 numberer    Plain
 constraints Transformation
 test        NormUnbalance $tolF $iter 0
 algorithm   Newton
-integrator  DisplacementControl 10 1 $pushIncr
+
+set curIncr $pushIncr
+integrator  DisplacementControl 10 1 $curIncr
 analysis    Static
 
 puts "Running horizontal pushover..."
 
-set stepP 0
-set ok    0
-while {$stepP < $nSteps && $ok == 0} {
+set cumDisp 0.0
+set ok      0
+while {$cumDisp < $targetDisp} {
+
     test      NormUnbalance $tolF $iter 0
     algorithm Newton
     set ok [analyze 1]
+
     if {$ok != 0} {
-        puts "Step $stepP: Newton failed → Newton -initial"
         test      NormUnbalance $tolF $iter 0
         algorithm Newton -initial
         set ok [analyze 1]
     }
     if {$ok != 0} {
-        puts "Step $stepP: Newton -initial failed → ModifiedNewton"
         test      NormUnbalance $tolF $iter 0
         algorithm ModifiedNewton
         set ok [analyze 1]
     }
     if {$ok != 0} {
-        puts "Pushover stopped at step $stepP (disp = [expr $stepP*$pushIncr] m)."
-        break
+        test      NormUnbalance $tolF $iter 0
+        algorithm KrylovNewton
+        set ok [analyze 1]
     }
-    incr stepP
+
+    if {$ok != 0} {
+        # convergence failed at this step size — halve it and retry from here
+        if {$curIncr > $minIncr} {
+            set curIncr [expr $curIncr / 2.0]
+            integrator DisplacementControl 10 1 $curIncr
+            puts "Convergence failed at [format %.5f $cumDisp] m — halving increment to [format %.3e $curIncr] m"
+        } else {
+            puts "Pushover stopped at [format %.5f $cumDisp] m — minimum increment reached without convergence."
+            break
+        }
+    } else {
+        set cumDisp [expr $cumDisp + $curIncr]
+        # step succeeded: grow the increment back toward the original size
+        if {$curIncr < $pushIncr} {
+            set curIncr [expr $curIncr * 2.0]
+            if {$curIncr > $pushIncr} { set curIncr $pushIncr }
+            integrator DisplacementControl 10 1 $curIncr
+        }
+    }
 }
 
-if {$ok == 0} {
-    puts "Pushover completed successfully ([format %.3f [expr $nSteps*$pushIncr]] m)."
+if {$cumDisp >= $targetDisp} {
+    puts "Pushover completed successfully ([format %.3f $cumDisp] m)."
+} else {
+    puts "Pushover ended at [format %.5f $cumDisp] m of target [format %.3f $targetDisp] m."
 }
 puts "All analyses done."
