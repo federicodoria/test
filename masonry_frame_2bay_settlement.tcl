@@ -32,7 +32,7 @@ set beta       0.30
 set rho     1200.0
 set g          9.81
 
-set targetSettlement  0.001
+set targetSettlement  0.008
 set tolF              0.001
 set iter             1000
 
@@ -249,6 +249,17 @@ pattern Plain 99 99 {
 }
 
 wipeAnalysis
+
+# --- diagnostic: check how close pier R and the bay-2 spandrels are to
+# their capacity from settlement + gravity alone, BEFORE any lateral load
+# is applied. If the tangent stiffness is already singular at step 0 of
+# the pushover, one of these elements is the most likely culprit — a
+# large differential settlement can crack/fail a squat spandrel on its
+# own, with no lateral demand needed at all.
+puts "\n--- Element forces after gravity + settlement freeze (pre-pushover) ---"
+foreach e {7 8 9 13 14 15} {
+    puts "  ele $e : [eleForce $e]"
+}
 
 # ---------------------------------------------------------------------------
 # RECORDERS
